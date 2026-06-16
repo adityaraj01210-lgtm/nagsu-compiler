@@ -6,6 +6,9 @@ import ast as python_ast
 # =====================================================================
 # STAGE 1: UNIFIED PRODUCTION LEXER
 # =====================================================================
+# =====================================================================
+# STAGE 1: UNIFIED PRODUCTION LEXER (UPDATED WITH LINE/COL TRACKING)
+# =====================================================================
 class NagsuLexer:
     def __init__(self, source_code):
         self.source_code = source_code
@@ -22,23 +25,38 @@ class NagsuLexer:
             ('VALUE',      r'\b\d+[a-zA-Z]+\b|\b\d+\b'),
             ('LBRACE',     r'\{'),
             ('RBRACE',     r'\}'),
-            ('SKIP',       r'[ \t\n\r]+'), 
+            ('SKIP',       r'[ \t\r]+'), # Note: Removed \n from here so we can split by line
             ('MISMATCH',   r'.'),            
         ]
         
         tok_regex = '|'.join(f'(?P<{name}>{pattern})' for name, pattern in token_specification)
+        lines = self.source_code.split('\n')
         
-        for mo in re.finditer(tok_regex, self.source_code):
-            kind = mo.lastgroup
-            value = mo.group()
-            if kind == 'SKIP':
-                continue
-            elif kind == 'MISMATCH':
-                raise SyntaxError(f"Lexer Error: Unexpected character: {value}")
-            else:
-                self.tokens.append({'type': kind, 'value': value})
+        for line_num, line_content in enumerate(lines, start=1):
+            for mo in re.finditer(tok_regex, line_content):
+                kind = mo.lastgroup
+                value = mo.group()
+                column = mo.start() + 1 # Calculate exact character position on this line
+                
+                if kind == 'SKIP':
+                    continue
+                elif kind == 'MISMATCH':
+                    # Trigger a crystal-clear, professional compiler error trace
+                    print(f"\n[Nagsu Syntax Error] Invalid token '{value}' detected!")
+                    print(f" -> File Location: main.nsg at Line {line_num}, Column {column}")
+                    print(f" -> Code Context:  {line_content.strip()}")
+                    print(f" -> Fix Suggestion: Check spelling or syntax structure rules.\n")
+                    sys.exit(1)
+                else:
+                    # Store line and column meta-data inside our token dictionary
+                    self.tokens.append({
+                        'type': kind, 
+                        'value': value, 
+                        'line': line_num, 
+                        'column': column
+                    })
+                    
         return self.tokens
-
 # =====================================================================
 # STAGE 2: ADAPTIVE PRODUCTION PARSER
 # =====================================================================
